@@ -17,14 +17,21 @@ pub struct Connection {
 }
 
 impl Connection {
-    pub fn new(settings: Settings) -> Self {
-        Self {
+    pub fn with_settings(settings: Settings) -> Result<Self> {
+        let mut decoder_table = DynamicTable::new();
+        decoder_table.set_max_blocked(settings.qpack_blocked_streams as usize)?;
+        decoder_table
+            .inserter()
+            .set_max_mem_size(settings.qpack_max_table_capacity as usize)?;
+
+        Ok(Self {
             local_settings: settings,
             remote_settings: None,
-            decoder_table: DynamicTable::new(),
+            decoder_table,
             encoder_table: DynamicTable::new(),
             pending_encoder: BytesMut::with_capacity(2048),
-        }
+            pending_decoder: BytesMut::with_capacity(2048),
+        })
     }
 
     pub fn encode_header(
@@ -57,6 +64,7 @@ impl Connection {
 #[derive(Debug, PartialEq)]
 pub enum Error {
     HeaderListTooLarge,
+    Settings { reason: String },
     EncodeError { reason: EncoderError },
 }
 
@@ -76,10 +84,8 @@ mod tests {
         let mut header = HeaderMap::new();
         header.append("hello", HeaderValue::from_static("text/html"));
 
-        let mut conn = Connection::new(Settings::default());
         let mut conn = Connection::default();
         assert_matches!(conn.encode_header(&StreamId(1), &header), Ok(_));
-
         assert!(conn.pending_encoder.is_empty());
     }
 
@@ -88,7 +94,7 @@ mod tests {
         let mut header = HeaderMap::new();
         header.append("hello", HeaderValue::from_static("text/html"));
 
-        let mut conn = Connection::new(Settings::default());
+        let mut conn = Connection::default();
         conn.encoder_table
             .inserter()
             .set_max_mem_size(2048)
@@ -107,7 +113,7 @@ mod tests {
             header.append("hello", HeaderValue::from_static("text/html"));
         }
 
-        let mut conn = Connection::new(Settings::default());
+        let mut conn = Connection::default();
         conn.remote_settings = Some(Settings {
             max_header_list_size: 4,
             ..Settings::default()

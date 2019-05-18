@@ -99,6 +99,7 @@ pub enum Error {
     InvalidHeaderName(String),
     InvalidHeaderValue(String),
     InvalidRequest(String),
+    InvalidResponse(String),
     Settings { reason: String },
     EncodeError { reason: EncoderError },
     DecodeError { reason: DecoderError },
@@ -125,6 +126,7 @@ impl From<headers::Error> for Error {
             headers::Error::InvalidHeaderValue(s) => Error::InvalidHeaderValue(s),
             headers::Error::InvalidRequest(e) => Error::InvalidRequest(format!("{:?}", e)),
             headers::Error::MissingMethod => Error::InvalidRequest("missing method".into()),
+            headers::Error::MissingStatus => Error::InvalidResponse("missing status".into()),
         }
     }
 }

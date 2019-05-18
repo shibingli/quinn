@@ -98,6 +98,7 @@ pub enum Error {
     HeaderListTooLarge,
     InvalidHeaderName(String),
     InvalidHeaderValue(String),
+    InvalidRequest(String),
     Settings { reason: String },
     EncodeError { reason: EncoderError },
     DecodeError { reason: DecoderError },
@@ -122,6 +123,8 @@ impl From<headers::Error> for Error {
         match err {
             headers::Error::InvalidHeaderName(s) => Error::InvalidHeaderName(s),
             headers::Error::InvalidHeaderValue(s) => Error::InvalidHeaderValue(s),
+            headers::Error::InvalidRequest(e) => Error::InvalidRequest(format!("{:?}", e)),
+            headers::Error::MissingMethod => Error::InvalidRequest("missing method".into()),
         }
     }
 }

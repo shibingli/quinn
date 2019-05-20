@@ -13,6 +13,7 @@ use slog::{self, o, Logger};
 use tokio::io::{self, Shutdown, WriteAll};
 
 use crate::{
+    body::RecvBody,
     connection::{ConnectionDriver, ConnectionRef},
     frame::FrameStream,
     proto::{
@@ -259,5 +260,9 @@ impl RecvResponse {
 
     pub fn response<'a>(&'a self) -> &'a Response<()> {
         &self.response
+    }
+
+    pub fn body(self) -> RecvBody {
+        RecvBody::with_capacity(self.recv, 10240, 1024000)
     }
 }

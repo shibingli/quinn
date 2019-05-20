@@ -202,7 +202,7 @@ impl<T> Future for SendRequest<T> {
                     },
                 },
                 SendRequestState::Decoding(ref mut frame) => {
-                    let stream_id = try_take(&mut self.stream_id, "Stream id is none")?;
+                    let stream_id = self.stream_id.ok_or(Error::Internal("Stream id is none"))?;
                     let result = {
                         let conn = &mut self.conn.h3.lock().unwrap().inner;
                         conn.decode_header(&stream_id, frame)
@@ -224,12 +224,14 @@ impl<T> Future for SendRequest<T> {
                             return Ok(Async::Ready(RecvResponse::build(
                                 h,
                                 try_take(&mut self.recv, "Recv is none")?,
+                                try_take(&mut self.stream_id, "stream is none")?,
+                                self.conn.clone(),
                             )?));
                         }
                         _ => unreachable!(),
                     }
                 }
-                _ => self.state = SendRequestState::Finished,
+                _ => return Err(Error::Poll),
             }
         }
     }
@@ -238,10 +240,17 @@ impl<T> Future for SendRequest<T> {
 pub struct RecvResponse {
     response: Response<()>,
     recv: FrameStream<RecvStream>,
+    stream_id: StreamId,
+    conn: ConnectionRef,
 }
 
 impl RecvResponse {
-    fn build(header: Header, recv: FrameStream<RecvStream>) -> Result<Self, Error> {
+    fn build(
+        header: Header,
+        recv: FrameStream<RecvStream>,
+        stream_id: StreamId,
+        conn: ConnectionRef,
+    ) -> Result<Self, Error> {
         let (status, headers) = header.into_response_parts()?;
         let mut response = Response::builder();
         response.status(status);
@@ -252,6 +261,8 @@ impl RecvResponse {
 
         Ok(Self {
             recv,
+            conn,
+            stream_id: stream_id,
             response: response
                 .body(())
                 .or(Err(Error::Internal("failed to build response")))?,
@@ -263,6 +274,6 @@ impl RecvResponse {
     }
 
     pub fn body(self) -> RecvBody {
-        RecvBody::with_capacity(self.recv, 10240, 1024000)
+        RecvBody::with_capacity(self.recv, 10240, 1024000, self.conn.clone(), self.stream_id)
     }
 }
